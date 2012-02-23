@@ -19,6 +19,7 @@ def Start():
   ObjectContainer.art = R(ART)
   DirectoryObject.thumb = R(ICON)
   HTTP.CacheTime = 1800
+  HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.7; rv:10.0.2) Gecko/20100101 Firefox/10.0.2'
 
 ####################################################################################################
 def MainMenu():
@@ -72,19 +73,27 @@ def MainMenu():
 def GetMyStuff():
   oc = ObjectContainer(no_cache=True)
 
+  # See if we have any creds stored.
+  if not Prefs['email'] and not Prefs['password']:
+    return MessageContainer(header='Logging in', message='Please enter your email and password in the preferences.')
+
   # See if we need to log in.
-  xml = HTML.ElementFromURL(VIMEO_URL + '/subscriptions/channels/sort:name', cacheTime=0)
-  if xml.xpath('//title')[0].text != 'Your subscriptions on Vimeo':
-    # See if we have any creds stored.
-    if not Prefs['email'] and not Prefs['password']:
-      return MessageContainer(header='Logging in', message='Please enter your email and password in the preferences.')
+  try:
+    xml = HTML.ElementFromURL(VIMEO_URL + '/inbox/subscriptions', cacheTime=0)
+  except:
+    xml = None
+
+  if xml is None or xml.xpath('//title')[0].text != 'Your subscription videos on Vimeo':
     # Try to log in
     Login()
-    Log(xml.xpath('//title')[0].text)
 
     # Now check to see if we're logged in.
-    xml = HTML.ElementFromURL(VIMEO_URL + '/subscriptions/channels/sort:name', cacheTime=0)
-    if xml.xpath('//title')[0].text != 'Your subscriptions on Vimeo':
+    try:
+      xml = HTML.ElementFromURL(VIMEO_URL + '/inbox/subscriptions', cacheTime=0)
+    except:
+      xml = None
+
+    if xml is None or xml.xpath('//title')[0].text != 'Your subscription videos on Vimeo':
       return MessageContainer(header='Error logging in', message='Check your email and password in the preferences.')
 
   user = xml.xpath('.//a[@class="label" and text()="Me"]')[0].get('href')[1:]
@@ -385,16 +394,22 @@ def GetThumb(url):
 
 ####################################################################################################
 def Login():
-  xsrft = HTML.ElementFromURL('https://secure.vimeo.com/log_in', cacheTime=0).xpath('//input[@id="xsrft"]')[0].get('value')
+  xsrft = HTML.ElementFromURL('http://vimeo.com/log_in', cacheTime=0).xpath('//input[@id="xsrft"]')[0].get('value')
 
   values = {
-     'sign_in[email]' : Prefs['email'],
-     'sign_in[password]' : Prefs['password'],
-     'token' : xsrft
+    'sign_in[email]' : Prefs['email'],
+    'sign_in[password]' : Prefs['password'],
+    'token' : xsrft
   }
 
   headers = {
-     'Cookie' : 'xsrft=%s' % xsrft
+    'Cookie' : 'clip_browse_format=thumbnail; cached_email=none@example.com; home_active_tab=inbox; uid=0; xsrft=%s' % xsrft
   }
 
-  x = HTTP.Request('https://secure.vimeo.com/log_in', values, headers).content
+  x = HTTP.Request('http://vimeo.com/log_in', values, headers)
+  Log("===================")
+  Log(x.headers)
+
+  h = HTTP.Request(VIMEO_URL).headers
+  Log(h)
+
